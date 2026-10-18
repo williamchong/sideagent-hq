@@ -63,11 +63,14 @@ export const A2A_STATE: Record<JobState, A2ATaskState> = {
   disputed: "input-required",
 };
 
+// States with no outgoing edge. `expired`, `cancelled` and `disputed` are reserved:
+// the prototype never writes them, and a document that is already in one cannot move.
 export const TERMINAL_STATES: readonly JobState[] = [
   "released",
   "expired",
   "rejected",
   "cancelled",
+  "disputed",
 ];
 
 const RelativePath = z

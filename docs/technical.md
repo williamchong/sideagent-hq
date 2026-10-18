@@ -333,17 +333,32 @@ Field CLI:
 - Runner comparison: `pnpm compare:runners --trials 3 --runners reference,ollama:gemma4:26b-a4b,vertex:gemini-2.5-flash-lite,claude` runs the candidate demo jobs in `demo/jobs/code.ts` and prints a Markdown table (see "Field runner checks").
 - Laptop runner: install Ollama, `ollama pull gemma4:26b-a4b`, `pnpm sandbox:build`, then `pnpm field` with `SIDEAGENT_API_KEY` set to a runner key. For managed models, set `SIDEAGENT_MODEL_BACKEND=vertex` and `GOOGLE_CLOUD_PROJECT`; `field/test/sandbox.test.ts` checks the public-test sandbox (no network, no host environment, read-only workspace) and is skipped without Docker, except in CI.
 - Sandbox image: `pnpm sandbox:build` builds `sideagent-sandbox-python:dev` with the local Docker. HQ checks need it (`SANDBOX_MODE=docker`). `hq/test/python-sandbox.test.ts` rebuilds it (cached) and runs attack fixtures and the HQ Docker sandbox against it; it is skipped without Docker, except in CI. Other HQ tests use a fake sandbox, so they don't need Docker.
-- Mission control: `pnpm emulators`, HQ (`pnpm --filter @sideagent/hq dev`, plus `HOUSE_RUNNERS=local` and the seeded `HOUSE_RUNNER_API_KEY` for house runners), then `pnpm --filter @sideagent/control dev`, which serves it on `http://localhost:3000`. Sign in through the Auth emulator's Google page, issue a handler key on the Keys page, and connect Gemini CLI with the snippet shown. `NUXT_PUBLIC_HQ_URL`, `NUXT_PUBLIC_FIRESTORE_EMULATOR` and `NUXT_PUBLIC_AUTH_EMULATOR` override the local addresses. `nuxt typecheck` runs as the package's typecheck; mission control has no unit tests, and its Firestore rules are tested in `hq`.
+- Mission control: `pnpm emulators`, HQ (`pnpm --filter @sideagent/hq dev`, plus `HOUSE_RUNNERS=local` and the seeded `HOUSE_RUNNER_API_KEY` for house runners), then `pnpm --filter @sideagent/control dev`, which serves it on `http://localhost:3000`. Sign in through the Auth emulator's Google page, issue a handler key on the Keys page, and connect Gemini CLI with the snippet shown. `NUXT_PUBLIC_HQ_URL`, `NUXT_PUBLIC_FIRESTORE_EMULATOR` and `NUXT_PUBLIC_AUTH_EMULATOR` override the local addresses. `nuxt typecheck` runs as the package's typecheck. `control/test/jobs.test.ts` checks that every job state lands in one lane of the mission map. Firestore rules are tested in `hq`.
 - Phase 3 demo: `pnpm emulators`, `pnpm sandbox:build`, `pnpm --filter @sideagent/hq dev`, then `pnpm demo:escrow`. It creates a poster owner and a runner owner, submits a wrong then a correct answer, and prints balances and what the poster sees.
 - `pnpm --filter @sideagent/hq seed` grants the owner `STARTING_CREDITS`. It also creates a `House runners` owner (with the same credits, for stakes) and its runner agent, and prints `HOUSE_RUNNER_API_KEY`.
 - Local house runners: restart HQ with `HOUSE_RUNNERS=local`, `HOUSE_RUNNER_API_KEY` and `GOOGLE_CLOUD_PROJECT` (for the default `vertex` backend). Every new job then gets one `sideagent field --once --job <id>` child process, logged by HQ with a `[house <jobId>]` prefix. The child gets only `PATH`, `HOME`, Docker, Ollama and Google Cloud model settings from HQ's environment, plus its own key, never HQ's settings or secrets.
 
 ## Testing
 
-- Unit tests per pipeline step against the Firestore emulator, with the sandbox and Gemini behind interfaces that tests can fake.
-- Ledger property: total of all balances is constant across any sequence of operations.
-- Agent eval set: benign and malicious jobs and results in `hq/test/fixtures/`; report block rate and false positives. Run on demand, not in CI (costs model calls).
-- End-to-end: `demo/run-demo.ts` against a deployed or emulated stack; this is also the video script.
+`pnpm test` runs every package's Vitest suite inside the Firestore and Auth emulators. Tests never call GCP. Gemini, the sandbox, the vault, the redactor and the dispatcher sit behind interfaces, so a suite fakes the ones it is not testing. Docker suites (`hq/test/python-sandbox.test.ts`, `field/test/sandbox.test.ts`) are skipped without Docker, except in CI.
+
+Each suite pins one promise of the design:
+
+| Promise | Test |
+|---|---|
+| A job cannot skip screening, and a terminal state cannot move | `hq/test/transitions.test.ts` |
+| Post, claim, submit, release; hidden tests and the result stay hidden; one of two claims wins; idempotency | `hq/test/jobs.test.ts` |
+| Screening fails closed, redaction restores only for the poster, weak or empty tests are rejected, a trap failure burns the runner, a hostile result is held | `hq/test/counterintel.test.ts` |
+| The sum of every balance stays 0, and each balance matches its ledger entries | `hq/test/ledger.test.ts` |
+| Clients cannot write Firestore, and `private`, `vault`, `ledger` and submissions stay HQ-only | `hq/test/firestore-rules.test.ts` |
+| Internal steps accept only the tasks service account's OIDC token | `hq/test/internal-steps.test.ts` |
+| A forged `summary.json`, a hang, a colliding path and a networked test fail in the real image | `hq/test/python-sandbox.test.ts` |
+| A ciphertext cannot be decrypted under another job ID | `hq/test/redact.test.ts` |
+| Caps, the kill switch and the budget guard stop paid work | `hq/test/limits.test.ts`, `hq/test/budget-guard.test.ts` |
+| Every job state sits in exactly one mission-control lane | `control/test/jobs.test.ts` |
+| The field CLI keeps a job's workspace to the spec and public tests, runs those tests with no network, and the dev executor only claims its owner's jobs | `field/test/` |
+
+Agent evals in `hq/test/fixtures/` report the screener's block rate and false positives. `pnpm --filter @sideagent/hq eval:screening` runs them on demand, not in CI, because they call the model. `demo/run-demo.ts` is the end-to-end run against a deployed or emulated stack, and it is the video script.
 
 ## 5-day plan
 

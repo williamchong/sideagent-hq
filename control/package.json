@@ -8,7 +8,7 @@
     "generate": "nuxt generate",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
-    "test": "echo 'mission control has no unit tests; Firestore rules are tested in hq'"
+    "test": "vitest run"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.138",
