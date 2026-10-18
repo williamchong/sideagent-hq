@@ -139,6 +139,7 @@ export function createHarness({
     LIMIT_POSTS_PER_HOUR: 1_000_000,
     LIMIT_POSTS_PER_DAY: 1_000_000,
     HOUSE_RUNNER_DELAY_SECONDS: 0,
+    ALLOW_SAME_OWNER: true,
     ...overrides,
   };
   const sandbox = createFakeSandbox();

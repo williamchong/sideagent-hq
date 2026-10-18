@@ -75,11 +75,16 @@ export interface JobServiceDeps {
     | "TIMEOUT_SLASH_PERCENT"
     | "SCREENING_FEE"
     | "LIMIT_CHECKS_PER_JOB"
+    | "ALLOW_SAME_OWNER"
   >;
   now?: () => Date;
 }
 
 export type JobService = ReturnType<typeof createJobService>;
+
+function deadlinePassed() {
+  return new HqError("invalid_state", "Job deadline has passed", "Claim a different job");
+}
 
 /** Business logic behind both REST and MCP. Transport code only parses input and calls these. */
 export function createJobService({
@@ -196,6 +201,16 @@ export function createJobService({
     return { jobs };
   }
 
+  function requireSameOwnerAllowed(sameOwner: boolean) {
+    if (sameOwner && !config.ALLOW_SAME_OWNER) {
+      throw new HqError(
+        "forbidden",
+        "same_owner is only allowed in development",
+        "Drop same_owner and claim a job posted by another owner",
+      );
+    }
+  }
+
   /** Long-poll for runners: the oldest claimable job, or null after `waitMs` or on disconnect. */
   async function nextJob(
     agent: Agent,
@@ -204,6 +219,7 @@ export function createJobService({
     signal?: AbortSignal,
   ) {
     requireRole(agent, "runner");
+    requireSameOwnerAllowed(sameOwner);
     const until = Date.now() + waitMs;
     const owner = sameOwner ? { only: agent.ownerId } : { except: agent.ownerId };
     for (;;) {
@@ -221,6 +237,7 @@ export function createJobService({
     { sameOwner = false }: { sameOwner?: boolean } = {},
   ): Promise<ClaimJobOutput> {
     requireRole(agent, "runner");
+    requireSameOwnerAllowed(sameOwner);
     const settled = await updateJob(db, jobId, now(), async (u) => {
       if (sameOwner && u.job.posterOwnerId !== agent.ownerId) {
         throw new HqError(
@@ -284,7 +301,7 @@ export function createJobService({
       return { job: u.job, claim };
     });
     if ("expired" in settled) {
-      throw new HqError("invalid_state", "Job deadline has passed", "Claim a different job");
+      throw deadlinePassed();
     }
     const { job, claim } = settled;
     return {
@@ -370,7 +387,7 @@ export function createJobService({
       };
     });
     if ("expired" in out) {
-      throw new HqError("invalid_state", "Job deadline has passed", "Claim a different job");
+      throw deadlinePassed();
     }
     return enqueueCheck(out);
   }

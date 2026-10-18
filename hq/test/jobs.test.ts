@@ -463,4 +463,18 @@ describe("runner long-poll", () => {
     expect(claim.status).toBe(200);
     ClaimJobOutput.parse(claim.body);
   });
+
+  it("refuses same_owner unless HQ allows it", async () => {
+    const prod = createHarness({ config: { ALLOW_SAME_OWNER: false } });
+    const keys = await prod.agents();
+    const { jobId } = (await prod.post(keys.poster)) as { jobId: string };
+    for (const res of [
+      await prod.call(keys.runner, "GET", "/v1/runner/next?same_owner=true&wait=0"),
+      await prod.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim?same_owner=true`),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(ApiError.parse(res.body).code).toBe("forbidden");
+    }
+    expect((await prod.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body.state).toBe("open");
+  });
 });

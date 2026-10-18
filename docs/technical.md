@@ -120,7 +120,7 @@ docs/
 - REST routes: `POST /v1/jobs`, `GET /v1/jobs?types=&min_reward=`, `GET /v1/jobs/:id`, `POST /v1/jobs/:id/claim`, `POST /v1/jobs/:id/submissions`.
 - Owner routes for mission control, authenticated with a Firebase ID token (`Authorization: Bearer <id token>`, verified by `firebase-admin`) instead of an API key, with CORS for `CONTROL_ORIGIN`: `POST /v1/owner` creates the owner on first sign-in, with the UID as its ID (D28) and `STARTING_CREDITS`, and returns `{owner_id, display_name, balance}` on every call; `POST /v1/owner/agents {role}` returns a new agent's `api_key` once; `DELETE /v1/owner/agents/:id` revokes one of the owner's agents, after which its key gets `unauthorized`. Creating a key has no idempotency key, because a replay couldn't return the key again. These are mission control's only writes; it reads everything else from Firestore.
 - Runner long-poll: `GET /v1/runner/next?types=...&wait=...` holds up to 30 seconds (`wait`, in seconds) and returns the oldest claimable job or `204`. The runner then claims it; a `409` means another runner won.
-- `same_owner=true` on `GET /v1/runner/next` and `POST /v1/jobs/:id/claim` limits a runner to jobs posted by its own owner; a claim on another owner's job returns `forbidden`. The dev command executor always sends it (D18). A normal claim of the runner's own owner's job is also `forbidden`, and `GET /v1/runner/next` skips those jobs, so a public runner cannot take its owner's work.
+- `same_owner=true` on `GET /v1/runner/next` and `POST /v1/jobs/:id/claim` limits a runner to jobs posted by its own owner; a claim on another owner's job returns `forbidden`. The dev command executor always sends it (D18). HQ honours it only with `ALLOW_SAME_OWNER` set, which the `dev` script does and production does not; otherwise it returns `forbidden`. A normal claim of the runner's own owner's job is also `forbidden`, and `GET /v1/runner/next` skips those jobs, so a public runner cannot take its owner's work.
 - Claims expire lazily (D21): no timer runs; an expired claim reads as `open` and is written back on the next claim or status call. An open job past its deadline is expired the same way: the next status or claim call returns the budget and keeps the screening fee.
 - Errors are always `{ code, reason, fix_hint }` from `protocol/src/errors.ts`.
 
@@ -304,6 +304,7 @@ HQ:
 | `FIREBASE_AUTH_EMULATOR_HOST` | Auth emulator address for verifying mission control's sign-in tokens (`dev` defaults it to `127.0.0.1:9099`); without it the owner routes refuse every call |
 | `CONTROL_ORIGIN` | Mission control's origin, allowed by CORS on `/v1/owner` (default `http://localhost:3000`) |
 | `CLAIM_TTL_SECONDS`, `CLAIM_ATTEMPTS` | Claim length (default 1800) and submissions per claim (default 3) |
+| `ALLOW_SAME_OWNER` | Honour `same_owner` for the dev command executor (default off; the `dev` script and tests turn it on, D18) |
 | `STARTING_CREDITS`, `STAKE_PERCENT`, `TIMEOUT_SLASH_PERCENT` | Credits for a new owner (100), stake as a share of the budget (20) and share of the stake slashed on claim timeout (50); D24 |
 
 Field CLI:

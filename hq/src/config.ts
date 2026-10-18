@@ -47,6 +47,9 @@ const Config = z.object({
   CONTROL_ORIGIN: z.string().default("http://localhost:3000"),
   CLAIM_TTL_SECONDS: z.coerce.number().int().positive().default(1800),
   CLAIM_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  // Honours `same_owner` on claim and long-poll, for the dev command executor (D18). Off in
+  // production, so a runner cannot claim its own owner's jobs; the `dev` script turns it on.
+  ALLOW_SAME_OWNER: z.stringbool().default(false),
   // Credit amounts (D24).
   STARTING_CREDITS: z.coerce.number().int().nonnegative().default(100),
   STAKE_PERCENT: Percent.default(20),
