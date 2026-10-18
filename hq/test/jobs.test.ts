@@ -411,9 +411,10 @@ describe("job deadline", () => {
       expect(again.state).toBe("expired");
       expect(await balance(keys.poster)).toBe(h.config.STARTING_CREDITS - h.config.SCREENING_FEE);
 
-      const claim = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+      const field = await h.agents();
+      const claim = await h.call(field.runner, "POST", `/v1/jobs/${jobId}/claim`);
       expect(claim.status).toBe(409);
-      const listed = await h.call(keys.runner, "GET", "/v1/jobs");
+      const listed = await h.call(field.runner, "GET", "/v1/jobs");
       expect(listed.body.jobs.map((j: JobSummary) => j.job_id)).not.toContain(jobId);
     } finally {
       h.clock.now = started;
@@ -441,6 +442,10 @@ describe("runner long-poll", () => {
     const next = await h.call(keys.runner, "GET", "/v1/runner/next?wait=0");
     if (next.status === 200) expect(next.body.job_id).not.toBe(jobId);
     else expect(next.status).toBe(204);
+    const listed = await h.call(keys.runner, "GET", "/v1/jobs");
+    expect(listed.body.jobs.map((j: JobSummary) => j.job_id)).not.toContain(jobId);
+    const asPoster = await h.call(keys.poster, "GET", "/v1/jobs");
+    expect(asPoster.body.jobs.map((j: JobSummary) => j.job_id)).toContain(jobId);
   });
 
   it("with same_owner, skips jobs from other owners", async () => {

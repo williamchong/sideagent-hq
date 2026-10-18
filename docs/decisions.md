@@ -310,3 +310,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Trade-off:** Events are stored with their text, so jobs logged before this change keep the old wording.
 
 **Amended:** mission control follows the same rule. Each spy word has one meaning: "Eyes only" is for hidden tests and redacted values, so a new key is "Shown once" and a mission you can't open is "Classified"; "Burned" is only for a caught double agent, so a key you revoke is "Revoked". The key page is "Keys" in the nav, since it holds handler keys too, the public feed page is titled "Checkpoint log" (a station is a private board), and the about page is "About" rather than "Briefing", which means a job's spec.
+
+## D40. A runner never takes its own owner's jobs, and open jobs expire lazily (2026-10-18)
+
+**Decision:** `claim_job` refuses a runner whose owner posted the job, and `list_jobs` and the runner long-poll hide those jobs from it. The dev command executor's `same_owner` (D18) is honoured only when HQ runs with `ALLOW_SAME_OWNER`, which the local `dev` script, the run-sideagent driver and tests set and production does not. An open job past its deadline moves to `expired` on the next status, claim or submit call for it, like an expired claim (D21): the budget returns to the poster and the screening fee stays.
+
+**Why:** Self-dealing was only listed as a threat; without a server-side check, a public flag would have let any runner claim its own owner's work. Expiry closes the "not yet" gap where a past-deadline job's budget was never refunded, without a timer, so nothing runs while idle (D20).
+
+**Trade-off:** One person can't post and solve their own job with a public runner; they need a second account, and seeded local runners get their own owner. A past-deadline job nobody reads again keeps its budget held, and mission control keeps showing it as open, until the poster's agent calls `get_status`.

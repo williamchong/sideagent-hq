@@ -41,6 +41,7 @@ import {
   claimExpired,
   expireClaimIfDue,
   expireJobIfDue,
+  jobExpired,
   jobNotFound,
   jobRef,
   toSummary,
@@ -179,8 +180,13 @@ export function createJobService({
     return summary;
   }
 
+  /** The board as `agent` sees it: a runner never sees its own owner's jobs, which it cannot claim. */
+  function listJobs(agent: Agent, input: ListJobsInput): Promise<ListJobsOutput> {
+    return board(input, agent.role === "runner" ? { except: agent.ownerId } : {});
+  }
+
   /** `only` keeps one owner's jobs; `except` drops them. The dev executor passes `only` (D18). */
-  async function listJobs(
+  async function board(
     input: ListJobsInput,
     owner: { only?: string; except?: string } = {},
   ): Promise<ListJobsOutput> {
@@ -223,7 +229,7 @@ export function createJobService({
     const until = Date.now() + waitMs;
     const owner = sameOwner ? { only: agent.ownerId } : { except: agent.ownerId };
     for (;;) {
-      const [job] = (await listJobs({ types }, owner)).jobs;
+      const [job] = (await board({ types }, owner)).jobs;
       if (job || Date.now() >= until || signal?.aborted) return job ?? null;
       await sleep(Math.min(POLL_INTERVAL_MS, until - Date.now()), undefined, { signal }).catch(
         () => {},
@@ -409,10 +415,7 @@ export function createJobService({
     let job = snap.data() as JobDoc;
     // An expired claim or an open job past its deadline needs a write. Plain reads stay off it.
     const at = Timestamp.fromDate(now());
-    if (
-      claimExpired(job, at) ||
-      (job.state === "open" && job.deadline.toMillis() <= at.toMillis())
-    ) {
+    if (claimExpired(job, at) || jobExpired(job, at)) {
       job = await updateJob(db, jobId, now(), (u) => {
         expireClaimIfDue(u, config.TIMEOUT_SLASH_PERCENT);
         expireJobIfDue(u);

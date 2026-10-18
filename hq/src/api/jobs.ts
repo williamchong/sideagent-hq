@@ -40,7 +40,7 @@ export function jobRoutes(jobs: JobService) {
       return c.json(await jobs.postJob(c.var.agent, input));
     })
     .get("/jobs", async (c) => {
-      return c.json(await jobs.listJobs(parseInput(ListQuery, c.req.query())));
+      return c.json(await jobs.listJobs(c.var.agent, parseInput(ListQuery, c.req.query())));
     })
     .get("/jobs/:id", async (c) => c.json(await jobs.getStatus(c.var.agent, c.req.param("id"))))
     .post("/jobs/:id/claim", async (c) => {

@@ -60,7 +60,7 @@ export function createMcpServer(jobs: JobService, agent: Agent): McpServer {
       outputSchema: ListJobsOutput,
       annotations: { readOnlyHint: true },
     },
-    (input) => toolResult(() => jobs.listJobs(input)),
+    (input) => toolResult(() => jobs.listJobs(agent, input)),
   );
 
   server.registerTool(

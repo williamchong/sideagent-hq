@@ -112,6 +112,11 @@ export function jobNotFound(jobId: string): HqError {
   return new HqError("not_found", `No job ${jobId}`, "Check the job_id; list_jobs shows open jobs");
 }
 
+/** An open job past its deadline, waiting for `expireJobIfDue` to write it back. */
+export function jobExpired(job: JobDoc, at: Timestamp): boolean {
+  return job.state === "open" && job.deadline.toMillis() <= at.toMillis();
+}
+
 export function claimExpired(job: JobDoc, at: Timestamp): boolean {
   return (
     CLAIM_HELD_STATES.includes(job.state) &&
@@ -149,7 +154,7 @@ export function expireClaimIfDue(
  * fee stays with the platform. A claim that is also due is settled first.
  */
 export function expireJobIfDue(u: JobUpdate): void {
-  if (u.job.state !== "open" || u.job.deadline.toMillis() > u.at.toMillis()) return;
+  if (!jobExpired(u.job, u.at)) return;
   u.move("expired", "Deadline passed; budget returned to the handler");
   refundBudget(u, "Budget refunded; job expired");
 }
