@@ -141,6 +141,7 @@ async function up(withControl) {
     ...EMULATORS,
     PORT: String(HQ_PORT),
     CONTROL_ORIGIN: CONTROL,
+    ALLOW_SAME_OWNER: "true",
   });
   await waitFor("HQ /healthz", async () => (await fetch(`${HQ}/healthz`)).ok, 90_000, hq);
   console.log(`hq: up at ${HQ} (REST ${HQ}/v1, MCP ${HQ}/mcp)`);
