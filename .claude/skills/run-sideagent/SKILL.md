@@ -37,7 +37,7 @@ export GOOGLE_CLOUD_PROJECT=sideagent-hq HQ_PORT=8090 CONTROL_PORT=3020   # free
 D=.claude/skills/run-sideagent/driver.mjs
 
 node $D up --control      # emulators (reused if already up) + HQ + mission control, logs in .data/run/
-node $D handler           # emulator Google user "Driver Handler" + its owner + poster/runner keys
+node $D handler           # emulator Google user "Driver Handler" + its owner + poster key; runner key under "Driver Field Agent"
 node $D smoke --as handler   # post -> screening (Gemini) -> claim -> submit -> Docker check -> released
 node $D shot / .data/run/board.png --sign-in --wait-text "Dead drop"
 node $D shot /ledger .data/run/ledger.png --sign-in

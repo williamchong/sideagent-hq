@@ -215,15 +215,24 @@ const HANDLER = {
   email_verified: true,
 };
 
-/** Signs HANDLER in to the Auth emulator over REST, creates its owner and a poster + runner key. */
-async function handler() {
+// A second account: a runner cannot claim its own owner's jobs, so the handler's runner key
+// belongs to this owner.
+const FIELD_AGENT = {
+  sub: "sideagent-driver-field",
+  email: "field@example.com",
+  name: "Driver Field Agent",
+  email_verified: true,
+};
+
+/** Signs `user` in to the Auth emulator over REST and creates its owner; returns an owner API call. */
+async function emulatorSignIn(user) {
   const auth = await fetch(
     "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=demo-api-key",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        postBody: `id_token=${encodeURIComponent(JSON.stringify(HANDLER))}&providerId=google.com`,
+        postBody: `id_token=${encodeURIComponent(JSON.stringify(user))}&providerId=google.com`,
         requestUri: "http://localhost",
         returnSecureToken: true,
       }),
@@ -232,8 +241,15 @@ async function handler() {
   if (!auth.idToken) throw new Error(`Auth emulator sign-in failed: ${JSON.stringify(auth)}`);
   const owner = (method, path, body) => api(auth.idToken, method, `/owner${path}`, body);
   const me = await owner("POST", ""); // `/v1/owner/` (trailing slash) is a 404
+  return { owner, me };
+}
+
+/** Creates HANDLER's owner and poster key, and a runner key under FIELD_AGENT's owner. */
+async function handler() {
+  const { owner, me } = await emulatorSignIn(HANDLER);
+  const { owner: fieldOwner } = await emulatorSignIn(FIELD_AGENT);
   const poster = await owner("POST", "/agents", { role: "poster" });
-  const runner = await owner("POST", "/agents", { role: "runner" });
+  const runner = await fieldOwner("POST", "/agents", { role: "runner" });
   saveKeys({ handler: { poster: poster.api_key, runner: runner.api_key } });
   console.log(`owner ${me.owner_id} "${me.display_name}" balance ${me.balance}`);
   console.log("poster + runner keys saved to .data/run/keys.json under `handler`");

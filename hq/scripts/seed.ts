@@ -3,15 +3,16 @@ import { loadConfig } from "../src/config.ts";
 import { createAgent } from "../src/store/agents.ts";
 import { createOwner } from "../src/store/owners.ts";
 
-// Creates one owner with starting credits, a poster and a runner agent, plus the house runner's
-// and the demo double agent's owners and agents, and prints their keys once.
+// Creates one owner with starting credits and a poster agent, a runner agent under a second owner,
+// plus the house runner's and the demo double agent's owners and agents, and prints their keys once.
 const config = loadConfig();
 const { db } = createAdapters(config);
 const hq = `http://localhost:${config.PORT}`;
 
 const ownerId = await createOwner(db, "Local dev owner", config.STARTING_CREDITS);
 const poster = await createAgent(db, ownerId, "poster");
-const runner = await createAgent(db, ownerId, "runner");
+const runnerOwnerId = await createOwner(db, "Local dev field agent", config.STARTING_CREDITS);
+const runner = await createAgent(db, runnerOwnerId, "runner");
 const houseOwnerId = await createOwner(db, "House runners", config.STARTING_CREDITS);
 const house = await createAgent(db, houseOwnerId, "runner");
 const doubleOwnerId = await createOwner(db, "Double agents", config.STARTING_CREDITS);
