@@ -389,6 +389,35 @@ describe("claim timeout", () => {
   });
 });
 
+describe("job deadline", () => {
+  it("expires an open job on the next status read and returns the budget", async () => {
+    const keys = await h.agents();
+    const deadline = new Date(h.clock.now.getTime() + 60_000).toISOString();
+    const { jobId } = await h.post(keys.poster, h.jobSpec({ deadline, budget: 10 }));
+    expect(await balance(keys.poster)).toBe(h.config.STARTING_CREDITS - 10 - h.config.SCREENING_FEE);
+
+    const started = h.clock.now;
+    h.clock.now = new Date(started.getTime() + 61_000);
+    try {
+      const status = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+      expect(status.state).toBe("expired");
+      expect(status.events.at(-1)).toMatchObject({ from: "open", to: "expired" });
+      expect(await balance(keys.poster)).toBe(h.config.STARTING_CREDITS - h.config.SCREENING_FEE);
+
+      const again = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+      expect(again.state).toBe("expired");
+      expect(await balance(keys.poster)).toBe(h.config.STARTING_CREDITS - h.config.SCREENING_FEE);
+
+      const claim = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+      expect(claim.status).toBe(409);
+      const listed = await h.call(keys.runner, "GET", "/v1/jobs");
+      expect(listed.body.jobs.map((j: JobSummary) => j.job_id)).not.toContain(jobId);
+    } finally {
+      h.clock.now = started;
+    }
+  });
+});
+
 describe("runner long-poll", () => {
   it("returns 204 when no job matches", async () => {
     const keys = await h.agents();

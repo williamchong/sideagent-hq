@@ -143,6 +143,17 @@ export function expireClaimIfDue(
   return { ownerId: claim.runnerOwnerId, amount: claim.stake - slashed };
 }
 
+/**
+ * Lazy job deadline (same shape as a claim timeout): no timer runs. The next status or claim
+ * call, once the job is `open`, moves it to `expired` and returns the budget. The screening
+ * fee stays with the platform. A claim that is also due is settled first.
+ */
+export function expireJobIfDue(u: JobUpdate): void {
+  if (u.job.state !== "open" || u.job.deadline.toMillis() > u.at.toMillis()) return;
+  u.move("expired", "Deadline passed; budget returned to the handler");
+  refundBudget(u, "Budget refunded; job expired");
+}
+
 /** Empties the claim's stake account: `slashed` credits to fees, the rest to the runner's owner. */
 export function releaseStake(
   u: JobUpdate,

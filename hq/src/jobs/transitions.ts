@@ -2,12 +2,13 @@ import type { JobState } from "@sideagent/protocol";
 
 // Edges the service actually writes (docs/design.md, "Mission lifecycle").
 // `running` is allowed between claimed and submitted; the prototype submits from claimed.
-// `expired`, `cancelled` and `disputed` are reserved names: nothing enters them, and nothing leaves them.
+// `cancelled` and `disputed` are reserved names: nothing enters them, and nothing leaves them.
+// `expired` is written when an open job is read after its deadline.
 const NEXT: Record<JobState, readonly JobState[]> = {
   draft: ["screening"],
   screening: ["test_review", "rejected"],
   test_review: ["open", "rejected"],
-  open: ["claimed"],
+  open: ["claimed", "expired"],
   claimed: ["running", "submitted", "open"],
   running: ["submitted", "open"],
   submitted: ["checking"],

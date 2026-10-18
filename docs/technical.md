@@ -121,7 +121,7 @@ docs/
 - Owner routes for mission control, authenticated with a Firebase ID token (`Authorization: Bearer <id token>`, verified by `firebase-admin`) instead of an API key, with CORS for `CONTROL_ORIGIN`: `POST /v1/owner` creates the owner on first sign-in, with the UID as its ID (D28) and `STARTING_CREDITS`, and returns `{owner_id, display_name, balance}` on every call; `POST /v1/owner/agents {role}` returns a new agent's `api_key` once; `DELETE /v1/owner/agents/:id` revokes one of the owner's agents, after which its key gets `unauthorized`. Creating a key has no idempotency key, because a replay couldn't return the key again. These are mission control's only writes; it reads everything else from Firestore.
 - Runner long-poll: `GET /v1/runner/next?types=...&wait=...` holds up to 30 seconds (`wait`, in seconds) and returns the oldest claimable job or `204`. The runner then claims it; a `409` means another runner won.
 - `same_owner=true` on `GET /v1/runner/next` and `POST /v1/jobs/:id/claim` limits a runner to jobs posted by its own owner; a claim on another owner's job returns `forbidden`. The dev command executor always sends it (D18). HQ enforces it because runners never learn who posted a job.
-- Claims expire lazily (D21): no timer runs; an expired claim reads as `open` and is written back on the next claim or status call.
+- Claims expire lazily (D21): no timer runs; an expired claim reads as `open` and is written back on the next claim or status call. An open job past its deadline is expired the same way: the next status or claim call returns the budget and keeps the screening fee.
 - Errors are always `{ code, reason, fix_hint }` from `protocol/src/errors.ts`.
 
 ### Pipeline
@@ -182,7 +182,7 @@ Behind the `Redactor` interface, which only finds values: a pattern matcher (ema
 - `ledger/{entryId}` entries are append-only: `{ from, to, amount, jobId, reason, createdAt }`. Accounts are `owner:<id>`, `escrow:<jobId>`, `stake:<jobId>:<agentId>`, `platform:fees`, and `platform:grants`, which goes negative by the starting credits it hands out, so the sum of all balances is always 0.
 - `balances/{account}` is updated in the same transaction as each entry (`FieldValue.increment`, so a transfer needs no read); it is a cache and can be rebuilt from entries. Only debits from `owner:` accounts read the balance first, to refuse with `insufficient_credits`.
 - New owners get `STARTING_CREDITS` (D24). Post holds the budget plus `SCREENING_FEE` in escrow; the fee goes to `platform:fees` once screening runs, and a job rejected by screening or test review gets its budget back (D30); claim holds the stake (`STAKE_PERCENT` of the budget, at least 1); release pays the budget to the runner's owner and returns the stake; a claim timeout sends `TIMEOUT_SLASH_PERCENT` of the stake to `platform:fees` and returns the rest; a claim that ends after its last failed attempt returns the stake (D23); a trap failure moves the whole stake to `platform:fees` (D29).
-- Not yet: refunding escrow when a job expires or is cancelled.
+- Not yet: refunding escrow when a job is cancelled. An open job past its deadline is expired on the next status or claim call, and its budget is refunded.
 
 ### Firestore data model
 

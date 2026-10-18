@@ -40,6 +40,7 @@ import {
   CLAIM_HELD_STATES,
   claimExpired,
   expireClaimIfDue,
+  expireJobIfDue,
   jobNotFound,
   jobRef,
   toSummary,
@@ -216,7 +217,7 @@ export function createJobService({
     { sameOwner = false }: { sameOwner?: boolean } = {},
   ): Promise<ClaimJobOutput> {
     requireRole(agent, "runner");
-    const { job, claim } = await updateJob(db, jobId, now(), async (u) => {
+    const settled = await updateJob(db, jobId, now(), async (u) => {
       if (sameOwner && u.job.posterOwnerId !== agent.ownerId) {
         throw new HqError(
           "forbidden",
@@ -229,6 +230,8 @@ export function createJobService({
       let balance = await balanceInTx(u.tx, db, ownerAccount);
       const refund = expireClaimIfDue(u, config.TIMEOUT_SLASH_PERCENT);
       if (refund?.ownerId === agent.ownerId) balance += refund.amount;
+      expireJobIfDue(u);
+      if (u.job.state === "expired") return { expired: true as const };
       // A retried claim by the same runner returns the existing claim.
       const held = u.job.claim;
       if (held?.runnerAgentId === agent.id) return { job: u.job, claim: held };
@@ -238,9 +241,6 @@ export function createJobService({
           `Job is ${u.job.state}`,
           "Call list_jobs and claim an open job",
         );
-      }
-      if (u.job.deadline.toMillis() <= u.at.toMillis()) {
-        throw new HqError("invalid_state", "Job deadline has passed", "Claim a different job");
       }
       const deadlineMs = Math.min(
         u.at.toMillis() + config.CLAIM_TTL_SECONDS * 1000,
@@ -272,6 +272,10 @@ export function createJobService({
       );
       return { job: u.job, claim };
     });
+    if ("expired" in settled) {
+      throw new HqError("invalid_state", "Job deadline has passed", "Claim a different job");
+    }
+    const { job, claim } = settled;
     return {
       job: {
         ...toSummary(jobId, job),
@@ -312,6 +316,8 @@ export function createJobService({
         return replaySubmission(jobId, submissionId, snap.data()!, requestHash, u.job.state);
       }
       expireClaimIfDue(u, config.TIMEOUT_SLASH_PERCENT);
+      expireJobIfDue(u);
+      if (u.job.state === "expired") return { expired: true as const };
       const claim = u.job.claim;
       const fixHint = "Claim the job with claim_job before submitting; get_status shows its state";
       if (claim?.runnerAgentId !== agent.id) {
@@ -352,6 +358,9 @@ export function createJobService({
         attempts_left: claim.attemptsLeft,
       };
     });
+    if ("expired" in out) {
+      throw new HqError("invalid_state", "Job deadline has passed", "Claim a different job");
+    }
     return enqueueCheck(out);
   }
 
@@ -370,10 +379,15 @@ export function createJobService({
     let events = firstEvents;
     if (!snap.exists) throw jobNotFound(jobId);
     let job = snap.data() as JobDoc;
-    // Only an expired claim needs a write; plain reads keep polling off the transaction path.
-    if (claimExpired(job, Timestamp.fromDate(now()))) {
+    // An expired claim or an open job past its deadline needs a write. Plain reads stay off it.
+    const at = Timestamp.fromDate(now());
+    if (
+      claimExpired(job, at) ||
+      (job.state === "open" && job.deadline.toMillis() <= at.toMillis())
+    ) {
       job = await updateJob(db, jobId, now(), (u) => {
         expireClaimIfDue(u, config.TIMEOUT_SLASH_PERCENT);
+        expireJobIfDue(u);
         return u.job;
       });
       events = await eventsQuery.get();

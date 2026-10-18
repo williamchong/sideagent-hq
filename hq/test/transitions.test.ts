@@ -10,6 +10,7 @@ const EDGES: readonly (readonly [JobState, JobState])[] = [
   ["test_review", "open"],
   ["test_review", "rejected"],
   ["open", "claimed"],
+  ["open", "expired"],
   ["claimed", "running"],
   ["claimed", "submitted"],
   ["claimed", "open"],

@@ -63,13 +63,13 @@ draft
                                       └─> failed ──> claimed | open    [failed]
 ```
 
-`running` is allowed between `claimed` and `submitted`. The prototype submits straight from `claimed`. `expired`, `cancelled` and `disputed` are reserved names: nothing writes them, and a document already in one cannot move. A job past its deadline stays `open` and refuses new claims; its budget stays in escrow. Cancelling, disputes, and refunding escrow when a job expires are not in the prototype.
+`running` is allowed between `claimed` and `submitted`. The prototype submits straight from `claimed`. An open job past its deadline moves to `expired` on the next status or claim call, and its budget returns to the poster; the screening fee stays. `cancelled` and `disputed` are reserved names: nothing writes them. Cancelling and disputes are not in the prototype.
 
 Rules:
 - A claim has a deadline. On timeout the job returns to `open` and the runner's stake is partly slashed.
 - A runner gets a limited number of submissions per claim (default 3). Each returns only pass/fail counts and test categories.
 - `failed` returns the job to the same runner (`claimed`) while its claim has attempts left (D23). After the last attempt the claim ends, the stake is returned, and the job goes back to `open`.
-- States with no outgoing edge are immutable: `released`, `rejected`, and the reserved `expired`, `cancelled` and `disputed`.
+- States with no outgoing edge are immutable: `released`, `rejected`, `expired`, and the reserved `cancelled` and `disputed`.
 
 ## Trust layer
 
