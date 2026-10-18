@@ -395,7 +395,9 @@ describe("job deadline", () => {
     const keys = await h.agents();
     const deadline = new Date(h.clock.now.getTime() + 60_000).toISOString();
     const { jobId } = await h.post(keys.poster, h.jobSpec({ deadline, budget: 10 }));
-    expect(await balance(keys.poster)).toBe(h.config.STARTING_CREDITS - 10 - h.config.SCREENING_FEE);
+    expect(await balance(keys.poster)).toBe(
+      h.config.STARTING_CREDITS - 10 - h.config.SCREENING_FEE,
+    );
 
     const started = h.clock.now;
     h.clock.now = new Date(started.getTime() + 61_000);
@@ -432,7 +434,9 @@ describe("runner long-poll", () => {
     expect(claim.status).toBe(403);
     expect(ApiError.parse(claim.body).code).toBe("forbidden");
     expect((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body.state).toBe("open");
-    expect(await balance(keys.runner)).toBe(h.config.STARTING_CREDITS - 10 - h.config.SCREENING_FEE);
+    expect(await balance(keys.runner)).toBe(
+      h.config.STARTING_CREDITS - 10 - h.config.SCREENING_FEE,
+    );
 
     const next = await h.call(keys.runner, "GET", "/v1/runner/next?wait=0");
     if (next.status === 200) expect(next.body.job_id).not.toBe(jobId);

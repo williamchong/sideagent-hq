@@ -81,7 +81,10 @@ describe("check limit", () => {
     await h.call(field.otherRunner, "POST", `/v1/jobs/${jobId}/claim`);
     expect((await submitWrong(h, field.otherRunner, jobId!, "b-0")).status).toBe(200);
     await settled(keys.poster, jobId!);
-    expectRateLimited(await submitWrong(h, field.otherRunner, jobId!, "b-1"), "all 4 of its checks");
+    expectRateLimited(
+      await submitWrong(h, field.otherRunner, jobId!, "b-1"),
+      "all 4 of its checks",
+    );
   });
 });
 
