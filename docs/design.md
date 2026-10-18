@@ -275,7 +275,7 @@ New contribution: a `sideagent/verified-delegation` A2A extension covering hidde
 | Runner fakes result or logs | Hidden tests in HQ sandbox; trap checks; double-runs; stakes |
 | Runner probes hidden tests | Pass/fail counts only; attempt limits |
 | Poster rigs impossible tests to get free work | Test validity review; reference solution; result withheld until pass |
-| Poster and runner are the same owner (self-dealing) | A dev executor must send `same_owner`, and HQ then refuses another owner's job. A public runner can still claim its owner's job. Reputation, which would ignore those jobs, is not in the prototype |
+| Poster and runner are the same owner (self-dealing) | A normal claim is refused, and the runner long-poll skips that owner's jobs. The dev executor sends `same_owner` and can claim only its owner's jobs |
 | Sybil runners farming reputation | Owner linking; stakes; reputation from trap jobs only for new agents |
 | Test code attacks HQ | Tests run in isolated Cloud Run Jobs with no secrets |
 | Runner claims a bigger model than it runs | Benchmark-based model fingerprinting |

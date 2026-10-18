@@ -70,17 +70,18 @@ describe("check limit", () => {
 
   it("caps submissions per job over all its claims", async () => {
     const keys = await h.agents();
+    const field = await h.agents();
     const { jobId } = await h.post(keys.poster);
-    await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    await h.call(field.runner, "POST", `/v1/jobs/${jobId}/claim`);
     for (let i = 0; i < h.config.CLAIM_ATTEMPTS; i++) {
-      expect((await submitWrong(h, keys.runner, jobId!, `a-${i}`)).status).toBe(200);
+      expect((await submitWrong(h, field.runner, jobId!, `a-${i}`)).status).toBe(200);
       await settled(keys.poster, jobId!);
     }
     // The claim ran out of attempts and the job reopened; the next claim gets what's left.
-    await h.call(keys.otherRunner, "POST", `/v1/jobs/${jobId}/claim`);
-    expect((await submitWrong(h, keys.otherRunner, jobId!, "b-0")).status).toBe(200);
+    await h.call(field.otherRunner, "POST", `/v1/jobs/${jobId}/claim`);
+    expect((await submitWrong(h, field.otherRunner, jobId!, "b-0")).status).toBe(200);
     await settled(keys.poster, jobId!);
-    expectRateLimited(await submitWrong(h, keys.otherRunner, jobId!, "b-1"), "all 4 of its checks");
+    expectRateLimited(await submitWrong(h, field.otherRunner, jobId!, "b-1"), "all 4 of its checks");
   });
 });
 
@@ -89,15 +90,16 @@ describe("kill switch", () => {
 
   it("refuses posts and submissions and skips dispatch while paused", async () => {
     const keys = await h.agents();
+    const field = await h.agents();
     const [claimed, waiting] = [await h.post(keys.poster), await h.post(keys.poster)];
-    await h.call(keys.runner, "POST", `/v1/jobs/${claimed.jobId}/claim`);
+    await h.call(field.runner, "POST", `/v1/jobs/${claimed.jobId}/claim`);
     const start = vi.fn(async (_jobId: string) => {});
     const dispatch = createDispatchStep(h.adapters.db, { start }, h.adapters.limits);
 
     await h.pause(true);
     try {
       expectRateLimited(await h.call(keys.poster, "POST", "/v1/jobs", h.jobSpec()), "paused");
-      expectRateLimited(await submitWrong(h, keys.runner, claimed.jobId!, "paused"), "paused");
+      expectRateLimited(await submitWrong(h, field.runner, claimed.jobId!, "paused"), "paused");
       await dispatch({ jobId: waiting.jobId! });
       expect(start).not.toHaveBeenCalled();
     } finally {

@@ -39,8 +39,9 @@ describe("dispatch step", () => {
   it("skips jobs that are no longer open", async () => {
     const off = createHarness();
     const keys = await off.agents();
+    const field = await off.agents();
     const { jobId } = (await off.post(keys.poster)) as { jobId: string };
-    await off.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`, {});
+    await off.call(field.runner, "POST", `/v1/jobs/${jobId}/claim`, {});
     const other = vi.fn(async () => {});
     await createDispatchStep(off.adapters.db, { start: other }, off.adapters.limits)({ jobId });
     expect(other).not.toHaveBeenCalled();

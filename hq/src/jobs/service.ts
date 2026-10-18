@@ -174,8 +174,11 @@ export function createJobService({
     return summary;
   }
 
-  /** `posterOwnerId` narrows the board to one owner's jobs (dev command executor, D18). */
-  async function listJobs(input: ListJobsInput, posterOwnerId?: string): Promise<ListJobsOutput> {
+  /** `only` keeps one owner's jobs; `except` drops them. The dev executor passes `only` (D18). */
+  async function listJobs(
+    input: ListJobsInput,
+    owner: { only?: string; except?: string } = {},
+  ): Promise<ListJobsOutput> {
     const at = Timestamp.fromDate(now());
     const snap = await db.collection("jobs").where("state", "in", BOARD_STATES).get();
     const jobs = snap.docs
@@ -184,7 +187,8 @@ export function createJobService({
       .filter(({ job }) => job.deadline.toMillis() > at.toMillis())
       .filter(({ job }) => !input.types || input.types.includes(job.type))
       .filter(({ job }) => input.min_reward === undefined || job.budget >= input.min_reward)
-      .filter(({ job }) => !posterOwnerId || job.posterOwnerId === posterOwnerId)
+      .filter(({ job }) => !owner.only || job.posterOwnerId === owner.only)
+      .filter(({ job }) => !owner.except || job.posterOwnerId !== owner.except)
       .sort((a, b) => a.job.createdAt.toMillis() - b.job.createdAt.toMillis())
       .slice(0, BOARD_LIMIT)
       // An expired claim reads as open; the next claim or status call writes it back.
@@ -201,9 +205,9 @@ export function createJobService({
   ) {
     requireRole(agent, "runner");
     const until = Date.now() + waitMs;
-    const ownerId = sameOwner ? agent.ownerId : undefined;
+    const owner = sameOwner ? { only: agent.ownerId } : { except: agent.ownerId };
     for (;;) {
-      const [job] = (await listJobs({ types }, ownerId)).jobs;
+      const [job] = (await listJobs({ types }, owner)).jobs;
       if (job || Date.now() >= until || signal?.aborted) return job ?? null;
       await sleep(Math.min(POLL_INTERVAL_MS, until - Date.now()), undefined, { signal }).catch(
         () => {},
@@ -235,6 +239,13 @@ export function createJobService({
       // A retried claim by the same runner returns the existing claim.
       const held = u.job.claim;
       if (held?.runnerAgentId === agent.id) return { job: u.job, claim: held };
+      if (!sameOwner && u.job.posterOwnerId === agent.ownerId) {
+        throw new HqError(
+          "forbidden",
+          "A runner cannot claim a job posted by its own owner",
+          "Claim a job from another owner",
+        );
+      }
       if (u.job.state !== "open") {
         throw new HqError(
           "conflict",
